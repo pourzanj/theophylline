@@ -1,0 +1,97 @@
+---
+title: "Fitting a PK/PD Model to the Theophylline Dataset in Stan"
+output: html_notebook
+---
+
+Plot data over time for all patients.
+
+```{r}
+library(tidyverse)
+library(PKPDmodels)
+library(rstan)
+
+theoph <- Theoph %>% as_tibble %>% mutate(DoseMass = Dose*Wt)
+theoph %>% ggplot(aes(Time, conc, color = Subject)) + geom_point() + geom_line()
+
+theoph.1 <- theoph %>% filter(Subject == 1)
+theoph.1 %>% ggplot(aes(Time, conc)) + geom_point() + geom_line()
+```
+
+Fit a Stan model to a single patient.
+
+```{r}
+dat <- list(Nt = nrow(theoph.1),
+            ts = theoph.1 %>% pull(Time) %>% `[`(-1),
+            y_init = c(theoph.1 %>% pull(DoseMass) %>% head(1),
+                       theoph.1 %>% pull(conc) %>% head(1)),
+            y = theoph.1 %>% pull(conc) %>% `[`(-1))
+
+fit <- stan(file = "theoph_single_individual.stan",
+            data = dat,
+            iter = 1000, chains = 1)
+
+post.samples <- extract(fit)
+
+y.rep <- cbind(post.samples$y_init_rep, post.samples$y_rep) %>%
+  as_tibble %>%
+  set_names(theoph.1 %>% pull(Time)) %>%
+  mutate(Sample = 1:500) %>%
+  gather(Time, y.rep, -Sample) %>%
+  mutate(Time = as.numeric(Time))
+
+# plot posterior predictives with original data
+y.rep %>%
+  ggplot(aes(Time, y.rep, group = Sample)) +
+  geom_line(alpha = 0.05) +
+  geom_point(alpha = 0.05) +
+  geom_line(aes(Time, conc, group = NULL), color = "red", data = theoph.1) +
+  geom_point(aes(Time, conc, group = NULL), color = "red", data = theoph.1)
+```
+
+
+Try all patients simaltaneously in the same model but not hierarchical.
+
+```{r}
+## hierarchical version
+times <- theoph %>%
+  select(Subject, Time) %>%
+  group_by(Subject) %>%
+  mutate(ObsNum = 1:11) %>%
+  ungroup() %>%
+  spread(ObsNum,Time) %>%
+  arrange(Subject) %>%
+  select(-Subject) %>%
+  select(-`1`) %>%
+  as.matrix
+
+y_init <- theoph %>%
+  group_by(Subject) %>%
+  summarize(DoseMass = head(DoseMass,1), conc = head(conc, 1)) %>%
+  arrange(Subject) %>%
+  select(DoseMass, conc) %>%
+  mutate(conc = conc + 1e-6) %>%
+  as.matrix
+
+y <- theoph %>%
+  select(Subject, conc) %>%
+  group_by(Subject) %>%
+  mutate(ObsNum = 1:11) %>%
+  ungroup() %>%
+  spread(ObsNum, conc) %>%
+  arrange(Subject) %>%
+  select(-Subject) %>%
+  select(-`1`) %>%
+  as.matrix
+
+dat <- list(N = theoph %>% pull(Subject) %>% unique %>% length,
+            Nt = 11,
+            ts = times,
+            y_init = y_init,
+            y = y)
+
+fit <- stan(file = "theoph_hierarchical.stan",
+            data = dat,
+            iter = 1000, chains = 1)
+
+```
+
