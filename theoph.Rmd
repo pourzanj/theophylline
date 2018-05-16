@@ -11,6 +11,7 @@ library(PKPDmodels)
 library(rstan)
 
 theoph <- Theoph %>% as_tibble %>% mutate(DoseMass = Dose*Wt)
+
 theoph %>% ggplot(aes(Time, conc, color = Subject)) + geom_point() + geom_line()
 
 theoph.1 <- theoph %>% filter(Subject == 1)
