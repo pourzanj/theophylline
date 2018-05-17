@@ -41,7 +41,7 @@ ForwardSymTheo <- function(b, Ka, Cl, V, c_init, sigma) {
   }
   
   parameters <- c(b = b, Ka = Ka, Cl = Cl, V = V)
-  state      <- c(A = 319.992*b, c = c_init)
+  state      <- c(A = 400*b, c = c_init)
   times      <- theoph.1 %>% pull(Time)
   
   ode.soln <- ode(y = state, times = times,
