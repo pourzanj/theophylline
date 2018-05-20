@@ -46,8 +46,91 @@ y.rep %>%
   geom_line(alpha = 0.05) +
   geom_point(alpha = 0.05) +
   geom_line(aes(Time, conc, group = NULL), color = "red", data = theoph.1) +
-  geom_point(aes(Time, conc, group = NULL), color = "red", data = theoph.1)
+  geom_point(aes(Time, conc, group = NULL), color = "red", data = theoph.1) +
+  ylab("Drug Concentration") +
+  ylim(0,35) +
+  theme(text = element_text(size=20))
 ```
+
+```{r}
+library(gridExtra)
+
+Ka.post.samples <- post.samples$theta[,1]
+Ka.plot <- Ka.post.samples %>% qplot + xlab("Ka (Absorption Rate)") +
+  theme(text = element_text(size=20))
+
+peak.conc.post.samples <- post.samples$z[,,2] %>% apply(1,max)
+peak.plot <- peak.conc.post.samples %>%
+  qplot +
+  xlab("Peak Concentration Level") +
+  geom_vline(xintercept = 11, color = "red") +
+  theme(text = element_text(size=20))
+
+grid.arrange(Ka.plot,peak.plot, nrow = 1)
+
+print("Prob. Peak Concentration Larger than 11 g/L: ", mean(peak.conc.post.samples > 11))
+mean(peak.conc.post.samples > 11)
+```
+
+Simulate Patient again With Higher Dose and Compare
+
+```{r}
+# forward simulate synthetic data with random parameter values from post.samples
+ForwardSymTheo <- function(b, Ka, Cl, V, c_init, sigma) {
+  
+  pkpd.two.compartment <- function(t, state, parameters) {
+    with(as.list(c(state, parameters)), {
+      dA <-  -Ka*A
+      dc <- (1/V)*(Ka*A - (Cl/V)*(c*V))
+      list(c(dA, dc))
+    })
+  }
+  
+  parameters <- c(b = b, Ka = Ka, Cl = Cl, V = V)
+  state      <- c(A = 400*b, c = c_init)
+  times      <- theoph.1 %>% pull(Time)
+  
+  ode.soln <- ode(y = state, times = times,
+             func = pkpd.two.compartment, parms = parameters,
+             method = "bdf") %>%
+    as.data.frame %>%
+    as.tibble
+  
+  synth.data <- ode.soln %>%
+    select(time,c) %>%
+    mutate(c = rnorm(nrow(.), mean = log(c), sd = sigma) %>% exp)
+  
+  synth.data
+}
+
+post.samples <- extract(fit)
+post.samples <- tibble(b = post.samples$b,
+                       Ka = post.samples$theta[,1],
+                       Cl = post.samples$theta[,2],
+                       V = post.samples$theta[,3],
+                       c_init = post.samples$c_init,
+                       sigma = post.samples$sigma)
+
+post.sample.to.sim <- post.samples %>% sample_n(500)
+
+y.rep.dose400 <- post.sample.to.sim %>% pmap(ForwardSymTheo) %>%
+  map2(1:500,function(tib,i) tib %>% mutate(Sample = i)) %>%
+  bind_rows() %>%
+  select(Sample, Time = time, y.rep = c)
+
+#bind_rows(mutate(y.rep, Dose = "320"), mutate(y.rep.dose400, Dose = "400"))
+
+y.rep.dose400 %>%
+    ggplot(aes(Time, y.rep, group = Sample)) +
+    geom_line(alpha = 0.05) +
+    geom_point(alpha = 0.05) +
+    geom_line(aes(Time, conc, group = NULL), color = "red", data = theoph.1) +
+    geom_point(aes(Time, conc, group = NULL), color = "red", data = theoph.1) +
+    ylab("Drug Concentration") +
+    ylim(0,35) +
+  theme(text = element_text(size=20))
+```
+
 
 
 Try all patients simaltaneously in the same model but not hierarchical.

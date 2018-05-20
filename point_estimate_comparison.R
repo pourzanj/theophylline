@@ -128,11 +128,12 @@ bind_rows(asymp.estimates, nuts.estimates) %>%
   geom_point() +
   geom_errorbar(aes(ymin = Q10, ymax = Q90)) +
   facet_wrap( ~ sample, scales = "free") +
+  # forgot to save true values so load manually from old plot
   geom_hline(aes(x = NULL, y = NULL, yintercept = Ka),
              color = "red",
-             data = post.sample.to.sim %>% select(Ka) %>% mutate(sample = 1:9)) +
+             data = tibble(Ka = c(1.41,2.4,1.51,1.51,1.5,1.14,0.94,1.4,1.3) , sample = 1:9)) +
   xlab("Inference Method") +
   ylab("Ka (Absorption Rate of Drug)") +
-  theme(text = element_text(size=30))
+  theme(text = element_text(size=20))
 
 

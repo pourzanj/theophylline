@@ -24,7 +24,7 @@ fit <- stan(file = "theoph_single_individual.stan",
             iter = 2000, chains = 2, control = list(adapt_delta = 0.9))
 
 post.samples <- extract(fit)
-nuts.samples <- tibble(Ka = post.samples$theta[,1], sigma = post.samples$sigma) %>% mutate(Method = "NUTS")
+nuts.samples <- tibble(Ka = post.samples$theta[,1], Cl = post.samples$theta[,2]) %>% mutate(Method = "NUTS")
 
 #################################
 # Point Estimate
@@ -34,18 +34,18 @@ model <- stan_model(file = "theoph_single_individual.stan")
 opt.object <- optimizing(model, data = dat, draws = 2000, hessian = TRUE)
 
 
-opt.theta1.sigma <- opt.object$par[c("theta[1]", "sigma")]
-cov.theta1.sigma <- opt.object$hessian[c("theta.1", "sigma"),c("theta.1", "sigma")]
+opt.theta1.theta2 <- opt.object$par[c("theta[1]", "theta[2]")]
+cov.theta1.theta2 <- opt.object$hessian[c("theta.1", "theta.2"),c("theta.1", "theta.2")]
 
-point.estimate <- tibble(Ka = rep(opt.theta1.sigma[1],2000), sigma = rep(opt.theta1.sigma[2],2000)) %>%
+point.estimate <- tibble(Ka = rep(opt.theta1.sigma[1],2000), Cl = rep(opt.theta1.theta2[2],2000)) %>%
   mutate(Method = "Point Estimate")
 
 #################################
 # Asymptotic Gaussian Approximation
 #################################
-gaussian.samples <- opt.object$theta_tilde[,c("theta[1]","sigma")] %>%
+gaussian.samples <- opt.object$theta_tilde[,c("theta[1]","theta[2]")] %>%
   as_tibble %>%
-  select(Ka = `theta[1]`, sigma) %>%
+  select(Ka = `theta[1]`, Cl = `theta[2]`) %>%
   mutate(Method = "Asymptotic")
 
 #################################
@@ -90,7 +90,7 @@ GetMetropolisSamples <- function(ll, q0, Sigma, num.samples) {
 }
 
 metropolis.samples <- GetMetropolisSamples(ll, q0, Sigma, num.samples = 2000-1) %>%
-  select(Ka, sigma) %>%
+  select(Ka, Cl) %>%
   mutate_all(exp) %>%
   mutate(Method = "Metropolis")
 
@@ -99,10 +99,9 @@ metropolis.samples <- GetMetropolisSamples(ll, q0, Sigma, num.samples = 2000-1) 
 #################################
 bind_rows(metropolis.samples, point.estimate, nuts.samples, gaussian.samples) %>%
   mutate(Method = factor(Method, levels = c("Point Estimate", "Asymptotic", "Metropolis", "NUTS"))) %>%
-  ggplot(aes(Ka,sigma)) +
+  ggplot(aes(Ka,Cl)) +
   geom_point(alpha = 0.2) +
   facet_wrap( ~ Method) +
   scale_x_log10() +
   scale_y_log10() +
-  ylab(expression(sigma)) +
   theme(text = element_text(size=40))
