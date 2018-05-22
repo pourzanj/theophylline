@@ -37,7 +37,7 @@ opt.object <- optimizing(model, data = dat, draws = 2000, hessian = TRUE)
 opt.theta1.theta2 <- opt.object$par[c("theta[1]", "theta[2]")]
 cov.theta1.theta2 <- opt.object$hessian[c("theta.1", "theta.2"),c("theta.1", "theta.2")]
 
-point.estimate <- tibble(Ka = rep(opt.theta1.sigma[1],2000), Cl = rep(opt.theta1.theta2[2],2000)) %>%
+point.estimate <- tibble(Ka = rep(opt.theta1.theta2[1],2000), Cl = rep(opt.theta1.theta2[2],2000)) %>%
   mutate(Method = "Point Estimate")
 
 #################################
@@ -98,10 +98,13 @@ metropolis.samples <- GetMetropolisSamples(ll, q0, Sigma, num.samples = 2000-1) 
 # Bind and Plot
 #################################
 bind_rows(metropolis.samples, point.estimate, nuts.samples, gaussian.samples) %>%
+  filter(Cl > 0.05) %>%
   mutate(Method = factor(Method, levels = c("Point Estimate", "Asymptotic", "Metropolis", "NUTS"))) %>%
   ggplot(aes(Ka,Cl)) +
   geom_point(alpha = 0.2) +
   facet_wrap( ~ Method) +
   scale_x_log10() +
   scale_y_log10() +
-  theme(text = element_text(size=40))
+  theme(text = element_text(size=30)) +
+  ylab("Cl (Clearance Rate)") +
+  xlab("Ka (Absorption Rate)")
